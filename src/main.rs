@@ -7,6 +7,10 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::io::{BufReader, Read};
 
+mod datastore;
+
+use datastore::*;
+
 #[derive(Debug)]
 struct FileInfo {
     full_path: String,
