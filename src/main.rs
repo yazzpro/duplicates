@@ -11,12 +11,7 @@ mod datastore;
 
 use datastore::*;
 
-#[derive(Debug)]
-struct FileInfo {
-    full_path: String,
-    size: u64,
-    hash: String
-}
+
 fn get_file_info(path: &str) -> Option<FileInfo> {
     let srcdir = PathBuf::from(&path);
     let full_path = fs::canonicalize(&srcdir).expect("File could not be processed");
