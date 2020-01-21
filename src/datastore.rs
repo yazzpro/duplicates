@@ -10,7 +10,7 @@ pub struct FileInfo {
 
 static DBFILENAME : &'static str = "filehashes.db";
 
-fn create_tables() -> Result<()> {
+pub fn create_tables() -> Result<()> {
     let connection = Connection::open(DBFILENAME)?;
     //https://rust-lang-nursery.github.io/rust-cookbook/database/sqlite.html
     connection.execute(
@@ -26,7 +26,7 @@ fn create_tables() -> Result<()> {
     Ok(())
 }
 
-fn get_entries_by_hash(hash: &str) -> Result<Vec<FileInfo>> {
+pub fn get_entries_by_hash(hash: &str) -> Result<Vec<FileInfo>> {
     let connection = Connection::open(DBFILENAME)?;
 
     let sql = r#"SELECT path, hash, file_size
@@ -39,7 +39,8 @@ fn get_entries_by_hash(hash: &str) -> Result<Vec<FileInfo>> {
         Ok(FileInfo { 
             full_path : row.get(0)?, 
             hash: row.get(1)?,
-            size : row.get::<usize,i64>(2)?.try_into().unwrap() })).unwrap();
+            size : row.get::<usize,i64>(2)?.try_into().unwrap() 
+        })).unwrap();
             
     let mut list: Vec<FileInfo> = Vec::new();
         while let Some(result) = entries.next() {
@@ -50,7 +51,31 @@ fn get_entries_by_hash(hash: &str) -> Result<Vec<FileInfo>> {
         Ok(list)                                      
 }
 
-fn add_entry(entry: FileInfo) -> Result<()> {
+pub fn get_entry_for_path(path: &str) -> Result<Option<FileInfo>> {
+    let connection = Connection::open(DBFILENAME)?;
+
+    let sql = r#"SELECT path, hash, file_size
+                 FROM file_hashes
+                 WHERE path=?"#;
+    let mut stmt = connection.prepare(sql)?;
+    let mut entries = stmt.query_map(&[path], 
+        |row| 
+            
+        Ok(FileInfo { 
+            full_path : row.get(0)?, 
+            hash: row.get(1)?,
+            size : row.get::<usize,i64>(2)?.try_into().unwrap() 
+        })).unwrap();
+   
+    while let Some(result) = entries.next() {
+        if let Some(entry) = result.ok() {
+            return Ok(Some(entry));
+        }
+    }      
+    Ok(None)                                                
+}
+
+pub fn add_entry(entry: &FileInfo) -> Result<()> {
     let connection = Connection::open(DBFILENAME)?;
     let size_sql :i64 = entry.size.try_into().unwrap();
     connection.execute(
