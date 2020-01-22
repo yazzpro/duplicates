@@ -67,7 +67,7 @@ pub fn get_entry_for_path(path: &str) -> Result<Option<FileInfo>> {
             size : row.get::<usize,i64>(2)?.try_into().unwrap() 
         })).unwrap();
    
-    while let Some(result) = entries.next() {
+    if let Some(result) = entries.next() {
         if let Some(entry) = result.ok() {
             return Ok(Some(entry));
         }

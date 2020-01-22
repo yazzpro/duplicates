@@ -6,6 +6,7 @@ use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
 use std::io::{BufReader, Read};
+use std::env;
 
 mod datastore;
 
@@ -49,7 +50,6 @@ fn process_path(path: &str) {
         if !entry.file_type().is_dir() {
             match get_file_info(entry.path().to_str().unwrap()) {
                 Some(info) => {
-                    //1 czy hash juz wystepuje? lub czy ten plik juz byl dodany?
                     let mut file_already_added = false;
                     let data_for_path = get_entry_for_path(&info.full_path).expect("I assume None but not error!");
                     match data_for_path {
@@ -63,11 +63,12 @@ fn process_path(path: &str) {
                     }
                     let possible_duplicates = get_entries_by_hash(&info.hash).expect("get_entries failed");
                     for dup_info in possible_duplicates.iter() {
-                        if info.hash == dup_info.hash {
-                            println!("Hashes are the same for files : {} and {} ! ", info.full_path, dup_info.full_path);
-                        }     
+                        if info.full_path != dup_info.full_path {
+                            if info.hash == dup_info.hash && info.size == dup_info.size {
+                                println!("Hashes are the same for files : {} and {} ! ", info.full_path, dup_info.full_path);
+                            }     
+                        }
                     }                   
-                    //2 dodać nasz hash
                     if !file_already_added {
                         add_entry(&info).expect("Unable to add entry to db");
                     }
@@ -82,7 +83,12 @@ fn process_path(path: &str) {
     }
 }
 fn main() -> Result<(), std::io::Error> {
-    create_tables().expect("I couldn't create tables!");
-    process_path(".");
+    if let Some(arg) = env::args().nth(1) {
+        create_tables().expect("I couldn't create tables!");
+        process_path(&arg);
+    } else {
+        println!("USAGE: duplicates PATH_TO_CHECK")
+
+    }    
     Ok(())
 }
