@@ -1,3 +1,6 @@
+extern crate config;
+extern crate serde;
+
 use crypto::sha2::Sha512;
 use crypto::digest::Digest;
 use walkdir::WalkDir;
@@ -9,9 +12,13 @@ use std::io::{BufReader, Read};
 use std::env;
 
 mod datastore;
+mod settings;
 
 use datastore::*;
+use settings::Settings;
 
+#[macro_use]
+extern crate serde_derive;
 
 fn get_file_info(path: &str) -> Option<FileInfo> {
     let srcdir = PathBuf::from(&path);
@@ -44,11 +51,18 @@ fn get_file_info(path: &str) -> Option<FileInfo> {
         hash : digest
     })
 }
-fn process_path(path: &str) {
+fn process_path(path: &str, settings: Settings) {
     
-    for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+    'filewalker: for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path().to_str().unwrap();
+        let s_path = String::from(path);
+        for s in  &settings.ignore_paths {
+            if s_path.contains(s) {
+                continue 'filewalker;
+            }
+        }
         if !entry.file_type().is_dir() {
-            match get_file_info(entry.path().to_str().unwrap()) {
+            match get_file_info(path) {
                 Some(info) => {
                     let mut file_already_added = false;
                     let data_for_path = get_entry_for_path(&info.full_path).expect("I assume None but not error!");
@@ -83,9 +97,14 @@ fn process_path(path: &str) {
     }
 }
 fn main() -> Result<(), std::io::Error> {
+    let settings = Settings::new();
+
+    // Print out our settings
+    println!("{:?}", settings);
+
     if let Some(arg) = env::args().nth(1) {
         create_tables().expect("I couldn't create tables!");
-        process_path(&arg);
+        process_path(&arg, settings.unwrap_or(Settings{ ignore_paths : vec![]}));
     } else {
         println!("USAGE: duplicates PATH_TO_CHECK")
 
