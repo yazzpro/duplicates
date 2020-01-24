@@ -1,8 +1,9 @@
-use config::{ConfigError, Config, File, Environment};
+use config::{ConfigError, Config, File};
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
     pub ignore_paths: Vec<String>,
+    pub working_dir: String
 }
 
 impl Settings {

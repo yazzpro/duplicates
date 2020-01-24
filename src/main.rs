@@ -51,9 +51,9 @@ fn get_file_info(path: &str) -> Option<FileInfo> {
         hash : digest
     })
 }
-fn process_path(path: &str, settings: Settings) {
+fn process_path( settings: Settings) {
     
-    'filewalker: for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+    'filewalker: for entry in WalkDir::new(settings.working_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path().to_str().unwrap();
         let s_path = String::from(path);
         for s in  &settings.ignore_paths {
@@ -98,16 +98,20 @@ fn process_path(path: &str, settings: Settings) {
 }
 fn main() -> Result<(), std::io::Error> {
     let settings = Settings::new();
-
-    // Print out our settings
-    println!("{:?}", settings);
-
+    create_tables().expect("I couldn't create tables!");        
+    if settings.is_ok() {
+        process_path(settings.unwrap());
+    } else
     if let Some(arg) = env::args().nth(1) {
-        create_tables().expect("I couldn't create tables!");
-        process_path(&arg, settings.unwrap_or(Settings{ ignore_paths : vec![]}));
+        process_path(Settings{ 
+                  ignore_paths : vec![], 
+                  working_dir : String::from(arg)
+                });
+        
     } else {
         println!("USAGE: duplicates PATH_TO_CHECK")
 
     }    
+    
     Ok(())
 }

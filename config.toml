@@ -1,1 +1,2 @@
 ignore_paths = ["src", "target",".git"]
+working_dir = "."
