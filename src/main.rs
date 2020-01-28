@@ -40,7 +40,7 @@ fn get_file_info(path: &str) -> Option<FileInfo> {
             }
     };
     if should_recalculate { 
-        print!("(re)calculating hash for file {}", path);
+       // print!("(re)calculating hash for file {}", path);
         hash = calculate_hash_for_file(&file) ;
     } 
     let file_length = meta.len();
@@ -117,7 +117,7 @@ fn process_path( settings: Settings) {
                         add_entry(&info).expect("Unable to add entry to db");
                     }
 
-                    println!("file: {}", info.full_path );
+                   // println!("file: {}", info.full_path );
                 }
                 None => println!("File at path {} was not processed", path)
             }            
