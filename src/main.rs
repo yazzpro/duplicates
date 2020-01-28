@@ -5,9 +5,10 @@ use crypto::sha2::Sha512;
 use crypto::digest::Digest;
 use walkdir::WalkDir;
 
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::fs;
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::io::{BufReader, Read};
 use std::env;
 
@@ -28,11 +29,32 @@ fn get_file_info(path: &str) -> Option<FileInfo> {
     if meta.is_dir() {
         return None;
     }
+    let last_update_time = meta.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let mut hash = String::from("");
+    let existing_entry = get_entry_for_path(full_path.to_str().unwrap()).unwrap();
+    let should_recalculate = match existing_entry {
+        None => true,
+        Some(v) => {
+            hash = v.hash;
+            v.last_modified < last_update_time
+            }
+    };
+    if should_recalculate { 
+        print!("(re)calculating hash for file {}", path);
+        hash = calculate_hash_for_file(&file) ;
+    } 
     let file_length = meta.len();
+   
+    Some(FileInfo {
+        full_path : full_path.to_str().expect("Path could not be translated").to_string(),
+        size : file_length,
+        hash : hash,
+        last_modified : last_update_time       
+    })
+}
+fn calculate_hash_for_file(file: &File) -> String {    
     let mut reader = BufReader::new(file);
-
-    let mut hasher = Sha512::new();
-    
+    let mut hasher = Sha512::new();    
     let mut buffer = [0; 4096];
 
     loop {
@@ -43,13 +65,20 @@ fn get_file_info(path: &str) -> Option<FileInfo> {
         hasher.input(&buffer[0..count]);
     }    
     
-    let digest = hasher.result_str();    
-
-    Some(FileInfo {
-        full_path : full_path.to_str().expect("Path could not be translated").to_string(),
-        size : file_length,
-        hash : digest
-    })
+    hasher.result_str()
+}
+fn get_duplicates_for_hash(hash:&str) -> Vec<FileInfo> {
+    let entries = get_entries_by_hash(&hash).expect("get_entries failed");
+    let mut result: Vec<FileInfo> = Vec::new(); 
+    for entry_to_test in entries.into_iter() {
+        if Path::new(&entry_to_test.full_path).exists() {
+            result.push(entry_to_test);
+        } else {
+            // file doesn't exist anymore: let's delete its data
+            delete_entry_for_path(&entry_to_test.full_path).unwrap_or_default();
+        }
+    }
+    result
 }
 fn process_path( settings: Settings) {
     
@@ -62,6 +91,7 @@ fn process_path( settings: Settings) {
             }
         }
         if !entry.file_type().is_dir() {
+            
             match get_file_info(path) {
                 Some(info) => {
                     let mut file_already_added = false;
@@ -75,7 +105,7 @@ fn process_path( settings: Settings) {
                         }
                         None => ()
                     }
-                    let possible_duplicates = get_entries_by_hash(&info.hash).expect("get_entries failed");
+                    let possible_duplicates = get_duplicates_for_hash(&info.hash);
                     for dup_info in possible_duplicates.iter() {
                         if info.full_path != dup_info.full_path {
                             if info.hash == dup_info.hash && info.size == dup_info.size {
@@ -110,7 +140,6 @@ fn main() -> Result<(), std::io::Error> {
         
     } else {
         println!("USAGE: duplicates PATH_TO_CHECK")
-
     }    
     
     Ok(())
