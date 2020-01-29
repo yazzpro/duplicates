@@ -1,4 +1,3 @@
-use std::time::SystemTime;
 use rusqlite::{params, Connection, Result};
 use rusqlite::NO_PARAMS;
 use std::convert::TryInto;
