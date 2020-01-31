@@ -108,8 +108,11 @@ fn process_file(path: &str,settings: &Settings) {
             }
 
             let possible_duplicates = get_duplicates_for_hash(&info.hash);
-            println!("possible duplicates: {:?}", &possible_duplicates);
-            process_duplicates(&info, possible_duplicates, settings);    // new method for handling duplicates
+            //println!("possible duplicates: {:?}", &possible_duplicates);
+            if possible_duplicates.len() >1
+            {
+                process_duplicates(&info, possible_duplicates, settings);    // new method for handling duplicates
+            }
            
         }
         None => println!("File at path {} was not processed", path) 
@@ -134,7 +137,7 @@ fn get_duplicates_sorted_by_score(dups: &Vec<FileInfo>, settings: &Settings) -> 
     scores.sort_by_key(|i| i.1);
     scores.reverse();
 
-    println!("duplicates with score: {:?}", &scores);
+    //println!("duplicates with score: {:?}", &scores);
 
     let just_filenames : Vec<String>= scores.into_iter().map( |s| s.0).collect();
 
