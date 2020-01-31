@@ -239,16 +239,18 @@ fn process_path( settings: &Settings) {
     'filewalker: for entry in WalkDir::new(&settings.working_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path().to_str().unwrap();
         let srcdir = PathBuf::from(&path);
-        let full_path = fs::canonicalize(&srcdir).expect("File could not be processed");
-        let s_path = String::from(full_path.to_str().unwrap());
+        let full_path_o = fs::canonicalize(&srcdir);
+        if full_path_o.is_ok() {
+            let s_path = String::from(full_path_o.unwrap().to_str().unwrap());
         
-        if should_ignore_path(&srcdir, settings) {
-            continue 'filewalker;
-        }
+            if should_ignore_path(&srcdir, settings) {
+                continue 'filewalker;
+            }
     
-        if !entry.file_type().is_dir() {            
+            if !entry.file_type().is_dir() {            
                 process_file(&s_path, settings);               
-        }
+            }
+    }
         
     }
 }
