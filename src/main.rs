@@ -191,7 +191,7 @@ fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings)
 fn notify_changes( settings: &Settings) {    
     let (tx, rx) = channel();
     let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(2)).unwrap();
-    watcher.watch(&settings.working_dir, RecursiveMode::Recursive).unwrap();
+    watcher.watch(&settings.working_dir, RecursiveMode::Recursive).unwrap_or_default();
     loop {
         match rx.recv() {
             Ok(event) => {
