@@ -95,7 +95,7 @@ fn process_file(path: &str,settings: &Settings) {
                     
                     if d.hash != info.hash {
                         println!("HASH changed for file : {} ! ", info.full_path);
-                        delete_entry_for_path(path).unwrap();
+                        delete_entry_for_path(path).unwrap();               // current fileinfo will be added as new
                     } else {
                         file_already_added = true;
                     }
@@ -109,7 +109,7 @@ fn process_file(path: &str,settings: &Settings) {
 
             let possible_duplicates = get_duplicates_for_hash(&info.hash);
             println!("possible duplicates: {:?}", &possible_duplicates);
-            process_duplicates(&info, possible_duplicates, settings);    
+            process_duplicates(&info, possible_duplicates, settings);    // new method for handling duplicates
            
         }
         None => println!("File at path {} was not processed", path) 
