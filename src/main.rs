@@ -152,10 +152,24 @@ fn mark_for_deletion(filenames: Vec<String>) {
     }
     println!("LEAVE: {}" , &filenames.last().unwrap() );
 }
+fn delete(filenames: Vec<String>) {
+    if filenames.len() <= 1 {
+        return;
+    }
+    let mut i = 0;
+    println!("Duplicates found:");
+    while i < filenames.len() -1 {// -1 is crucial as we don't want to delete every occurence
+        println!("DELETE: {}", &filenames[i]);
+        fs::remove_file(&filenames[i]).unwrap();
+        delete_entry_for_path(&filenames[i]).unwrap();
+        i+= 1;
+    }
+    println!("LEAVE: {}" , &filenames.last().unwrap() );
+}
 fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings) {
     let d = get_duplicates_sorted_by_score(&dups, settings);
     match settings.action.as_str() {
-        //"D" => 
+        "D" => delete(d), 
         "T" => mark_for_deletion(d),
         "S" => { mark_for_deletion(d); std::process::exit(1); }
         _ => {  // default action - write about hashes
