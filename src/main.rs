@@ -208,9 +208,12 @@ fn notify_changes( settings: &Settings) {
 }
 fn process_file_check_ignore(path_buf: &PathBuf, settings: &Settings) {
     if !should_ignore_path(path_buf, settings) {
-        let full_path = fs::canonicalize(&path_buf).expect("File could not be processed");
+        let f_path = fs::canonicalize(&path_buf);
+        if f_path.is_ok() {
+        let full_path = f_path.unwrap();
         let s_path = full_path.to_str().unwrap();
         process_file(s_path,settings);
+        }
     }
 }
 fn should_ignore_path(path_buf: &PathBuf, settings: &Settings) -> bool{
