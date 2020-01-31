@@ -1,2 +1,4 @@
 ignore_paths = ["src", "target",".git"] 
 working_dir = "."
+delete_score = ["telefon", "DCIM", "karta","karty"]
+action="T"

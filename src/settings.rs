@@ -3,7 +3,9 @@ use config::{ConfigError, Config, File};
 #[derive(Debug, Deserialize)]
 pub struct Settings {
     pub ignore_paths: Vec<String>,
-    pub working_dir: String
+    pub working_dir: String,
+    pub delete_score: Vec<String>,
+    pub action: String
 }
 
 impl Settings {
