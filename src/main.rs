@@ -18,17 +18,20 @@ use std::env;
 
 mod datastore;
 mod settings;
+mod file_manager;
 
+use file_manager::*;
 use datastore::*;
 use settings::Settings;
 
 #[macro_use]
 extern crate serde_derive;
 
-fn get_file_info(path: &str) -> Option<FileInfo> {
+fn get_file_info(path: &str, file_manager: &impl HandleFiles) -> Option<FileInfo> {
     let srcdir = PathBuf::from(&path);
-    let full_path = fs::canonicalize(&srcdir).expect("File could not be processed");
-    let file = File::open(&full_path).expect("can't upen file");
+    let full_path = file_manager.get_full_path(&srcdir).expect("File could not be processed");
+    
+    let file = file_manager.get_file(&full_path).expect("can't upen file");
     let meta = file.metadata().unwrap();
     if meta.is_dir() {
         return None;
@@ -85,8 +88,8 @@ fn get_duplicates_for_hash(hash:&str) -> Vec<FileInfo> {
     result
 }
 /// Main logic
-fn process_file(path: &str,settings: &Settings) {
-    match get_file_info(path) {
+fn process_file(path: &str,settings: &Settings,file_manager: &impl HandleFiles) {
+    match get_file_info(path, file_manager) {
         Some(info) => {
             let mut file_already_added = false;
             let data_for_path = get_entry_for_path(&info.full_path).expect("I assume None but not error!");
@@ -111,7 +114,7 @@ fn process_file(path: &str,settings: &Settings) {
             //println!("possible duplicates: {:?}", &possible_duplicates);
             if possible_duplicates.len() >1
             {
-                process_duplicates(&info, possible_duplicates, settings);    // new method for handling duplicates
+                process_duplicates(&info, possible_duplicates, settings, file_manager);    // new method for handling duplicates
             }
            
         }
@@ -155,7 +158,7 @@ fn mark_for_deletion(filenames: Vec<String>) {
     }
     println!("LEAVE: {}" , &filenames.last().unwrap() );
 }
-fn delete(filenames: Vec<String>) {
+fn delete(filenames: Vec<String>, file_manager: &impl HandleFiles) {
     if filenames.len() <= 1 {
         return;
     }
@@ -163,16 +166,16 @@ fn delete(filenames: Vec<String>) {
     println!("Duplicates found:");
     while i < filenames.len() -1 {// -1 is crucial as we don't want to delete every occurence
         println!("DELETE: {}", &filenames[i]);
-        fs::remove_file(&filenames[i]).unwrap();
+        file_manager.remove_file(&filenames[i]).unwrap();
         delete_entry_for_path(&filenames[i]).unwrap();
         i+= 1;
     }
     println!("LEAVE: {}" , &filenames.last().unwrap() );
 }
-fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings) {
+fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings, file_manager: &impl HandleFiles) {
     let d = get_duplicates_sorted_by_score(&dups, settings);
     match settings.action.as_str() {
-        "D" => delete(d), 
+        "D" => delete(d, file_manager), 
         "T" => mark_for_deletion(d),
         "S" => { mark_for_deletion(d); std::process::exit(1); }
         _ => {  // default action - write about hashes
@@ -188,7 +191,7 @@ fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings)
     
     
 }
-fn notify_changes( settings: &Settings) {    
+fn notify_changes( settings: &Settings,file_manager: &impl HandleFiles) {    
     let (tx, rx) = channel();
     let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(2)).unwrap();
     watcher.watch(&settings.working_dir, RecursiveMode::Recursive).unwrap_or_default();
@@ -196,8 +199,8 @@ fn notify_changes( settings: &Settings) {
         match rx.recv() {
             Ok(event) => {
                 match event {
-                    DebouncedEvent::Write(p) => process_file_check_ignore(&p, settings),
-                    DebouncedEvent::Create(p) => process_file_check_ignore(&p, settings), 
+                    DebouncedEvent::Write(p) => process_file_check_ignore(&p, settings, file_manager),
+                    DebouncedEvent::Create(p) => process_file_check_ignore(&p, settings, file_manager), 
                     _ =>  (),//println!("{:?}", event)
                 } 
                 
@@ -206,18 +209,18 @@ fn notify_changes( settings: &Settings) {
         }
     }
 }
-fn process_file_check_ignore(path_buf: &PathBuf, settings: &Settings) {
-    if !should_ignore_path(path_buf, settings) {
-        let f_path = fs::canonicalize(&path_buf);
+fn process_file_check_ignore(path_buf: &PathBuf, settings: &Settings, file_manager: &impl HandleFiles) {
+    if !should_ignore_path(path_buf, settings,file_manager) {
+        let f_path = file_manager.get_full_path(&path_buf);
         if f_path.is_ok() {
         let full_path = f_path.unwrap();
         let s_path = full_path.to_str().unwrap();
-        process_file(s_path,settings);
+        process_file(s_path,settings, file_manager);
         }
     }
 }
-fn should_ignore_path(path_buf: &PathBuf, settings: &Settings) -> bool{
-    match fs::canonicalize(&path_buf) {
+fn should_ignore_path(path_buf: &PathBuf, settings: &Settings, file_manager: &impl HandleFiles) -> bool{
+    match file_manager.get_full_path(&path_buf) {
         Ok(full_path) => {
             let s_path = String::from(full_path.to_str().unwrap());
             for s in &settings.ignore_paths {
@@ -234,21 +237,21 @@ fn should_ignore_path(path_buf: &PathBuf, settings: &Settings) -> bool{
    
     false
 }
-fn process_path( settings: &Settings) {
+fn process_path( settings: &Settings, file_manager: &impl HandleFiles) {
     
-    'filewalker: for entry in WalkDir::new(&settings.working_dir).into_iter().filter_map(|e| e.ok()) {
+    'filewalker: for entry in file_manager.walkdir(&settings.working_dir).filter_map(|e| e.ok()) {
         let path = entry.path().to_str().unwrap();
         let srcdir = PathBuf::from(&path);
-        let full_path_o = fs::canonicalize(&srcdir);
+        let full_path_o = file_manager.get_full_path(&srcdir);
         if full_path_o.is_ok() {
             let s_path = String::from(full_path_o.unwrap().to_str().unwrap());
         
-            if should_ignore_path(&srcdir, settings) {
+            if should_ignore_path(&srcdir, settings, file_manager) {
                 continue 'filewalker;
             }
     
             if !entry.file_type().is_dir() {            
-                process_file(&s_path, settings);               
+                process_file(&s_path, settings,file_manager);               
             }
     }
         
@@ -256,11 +259,12 @@ fn process_path( settings: &Settings) {
 }
 fn main() -> std::result::Result<(), std::io::Error> {
     let settings = Settings::new();
+    let file_manager = FileManager::new();
     create_tables().expect("I couldn't create tables!");            
     if settings.is_ok() {  
         let u_settings = settings.unwrap();      
-        process_path(&u_settings);
-        notify_changes(&u_settings);
+        process_path(&u_settings, &file_manager);
+        notify_changes(&u_settings, &file_manager);
     } else
     if let Some(arg) = env::args().nth(1) {
 
@@ -268,7 +272,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
                   ignore_paths : vec![], 
                   working_dir : String::from(arg),
                   action: "T".to_string(), delete_score: vec![],
-                });
+                }, &file_manager);
                 
         
     } else {
