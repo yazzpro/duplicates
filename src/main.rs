@@ -4,13 +4,11 @@ extern crate notify;
 
 use crypto::sha2::Sha512;
 use crypto::digest::Digest;
-use walkdir::WalkDir;
 
 use notify::{Watcher, RecursiveMode,RecommendedWatcher, DebouncedEvent};
 
 use std::sync::mpsc::channel;
 use std::time::{UNIX_EPOCH, Duration};
-use std::fs;
 use std::fs::File;
 use std::path::{PathBuf, Path};
 use std::io::{BufReader, Read};
@@ -27,7 +25,7 @@ use settings::Settings;
 #[macro_use]
 extern crate serde_derive;
 
-fn get_file_info(path: &str, file_manager: &impl HandleFiles) -> Option<FileInfo> {
+fn get_file_info(path: &str, file_manager: &impl HandleFiles, data_manager: &impl DataManager) -> Option<FileInfo> {
     let srcdir = PathBuf::from(&path);
     let full_path = file_manager.get_full_path(&srcdir).expect("File could not be processed");
     
@@ -38,7 +36,7 @@ fn get_file_info(path: &str, file_manager: &impl HandleFiles) -> Option<FileInfo
     }
     let last_update_time = meta.modified().unwrap().duration_since(UNIX_EPOCH).unwrap().as_secs();
     let mut hash = String::from("");
-    let existing_entry = get_entry_for_path(full_path.to_str().unwrap()).unwrap();
+    let existing_entry = data_manager.get_entry_for_path(full_path.to_str().unwrap()).unwrap();
     let should_recalculate = match existing_entry {
         None => true,
         Some(v) => {
@@ -74,31 +72,31 @@ fn calculate_hash_for_file(file: &File) -> String {
     
     hasher.result_str()
 }
-fn get_duplicates_for_hash(hash:&str) -> Vec<FileInfo> {
-    let entries = get_entries_by_hash(&hash).expect("get_entries failed");
+fn get_duplicates_for_hash(hash:&str, data_manager: &impl DataManager) -> Vec<FileInfo> {
+    let entries = data_manager.get_entries_by_hash(&hash).expect("get_entries failed");
     let mut result: Vec<FileInfo> = Vec::new(); 
     for entry_to_test in entries.into_iter() {
         if Path::new(&entry_to_test.full_path).exists() {
             result.push(entry_to_test);
         } else {
             // file doesn't exist anymore: let's delete its data
-            delete_entry_for_path(&entry_to_test.full_path).unwrap_or_default();
+            data_manager.delete_entry_for_path(&entry_to_test.full_path).unwrap_or_default();
         }
     }
     result
 }
 /// Main logic
-fn process_file(path: &str,settings: &Settings,file_manager: &impl HandleFiles) {
-    match get_file_info(path, file_manager) {
+fn process_file(path: &str,settings: &Settings,file_manager: &impl HandleFiles, data_manager: &impl DataManager) {
+    match get_file_info(path, file_manager,data_manager) {
         Some(info) => {
             let mut file_already_added = false;
-            let data_for_path = get_entry_for_path(&info.full_path).expect("I assume None but not error!");
+            let data_for_path = data_manager.get_entry_for_path(&info.full_path).expect("I assume None but not error!");
             match data_for_path {
                 Some(d) => {
                     
                     if d.hash != info.hash {
                         println!("HASH changed for file : {} ! ", info.full_path);
-                        delete_entry_for_path(path).unwrap();               // current fileinfo will be added as new
+                        data_manager.delete_entry_for_path(path).unwrap();               // current fileinfo will be added as new
                     } else {
                         file_already_added = true;
                     }
@@ -107,14 +105,14 @@ fn process_file(path: &str,settings: &Settings,file_manager: &impl HandleFiles) 
             }
                      
             if !file_already_added {
-                add_entry(&info).expect("Unable to add entry to db");
+                data_manager.add_entry(&info).expect("Unable to add entry to db");
             }
 
-            let possible_duplicates = get_duplicates_for_hash(&info.hash);
+            let possible_duplicates = get_duplicates_for_hash(&info.hash, data_manager);
             //println!("possible duplicates: {:?}", &possible_duplicates);
             if possible_duplicates.len() >1
             {
-                process_duplicates(&info, possible_duplicates, settings, file_manager);    // new method for handling duplicates
+                process_duplicates(&info, possible_duplicates, settings, file_manager,data_manager);    // new method for handling duplicates
             }
            
         }
@@ -158,7 +156,7 @@ fn mark_for_deletion(filenames: Vec<String>) {
     }
     println!("LEAVE: {}" , &filenames.last().unwrap() );
 }
-fn delete(filenames: Vec<String>, file_manager: &impl HandleFiles) {
+fn delete(filenames: Vec<String>, file_manager: &impl HandleFiles, data_manager: &impl DataManager) {
     if filenames.len() <= 1 {
         return;
     }
@@ -167,15 +165,15 @@ fn delete(filenames: Vec<String>, file_manager: &impl HandleFiles) {
     while i < filenames.len() -1 {// -1 is crucial as we don't want to delete every occurence
         println!("DELETE: {}", &filenames[i]);
         file_manager.remove_file(&filenames[i]).unwrap();
-        delete_entry_for_path(&filenames[i]).unwrap();
+        data_manager.delete_entry_for_path(&filenames[i]).unwrap();
         i+= 1;
     }
     println!("LEAVE: {}" , &filenames.last().unwrap() );
 }
-fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings, file_manager: &impl HandleFiles) {
+fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings, file_manager: &impl HandleFiles, data_manager: &impl DataManager) {
     let d = get_duplicates_sorted_by_score(&dups, settings);
     match settings.action.as_str() {
-        "D" => delete(d, file_manager), 
+        "D" => delete(d, file_manager,data_manager), 
         "T" => mark_for_deletion(d),
         "S" => { mark_for_deletion(d); std::process::exit(1); }
         _ => {  // default action - write about hashes
@@ -191,7 +189,7 @@ fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings,
     
     
 }
-fn notify_changes( settings: &Settings,file_manager: &impl HandleFiles) {    
+fn notify_changes( settings: &Settings,file_manager: &impl HandleFiles, data_manager: &impl DataManager) {    
     let (tx, rx) = channel();
     let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(2)).unwrap();
     watcher.watch(&settings.working_dir, RecursiveMode::Recursive).unwrap_or_default();
@@ -199,8 +197,8 @@ fn notify_changes( settings: &Settings,file_manager: &impl HandleFiles) {
         match rx.recv() {
             Ok(event) => {
                 match event {
-                    DebouncedEvent::Write(p) => process_file_check_ignore(&p, settings, file_manager),
-                    DebouncedEvent::Create(p) => process_file_check_ignore(&p, settings, file_manager), 
+                    DebouncedEvent::Write(p) => process_file_check_ignore(&p, settings, file_manager,data_manager),
+                    DebouncedEvent::Create(p) => process_file_check_ignore(&p, settings, file_manager,data_manager), 
                     _ =>  (),//println!("{:?}", event)
                 } 
                 
@@ -209,13 +207,13 @@ fn notify_changes( settings: &Settings,file_manager: &impl HandleFiles) {
         }
     }
 }
-fn process_file_check_ignore(path_buf: &PathBuf, settings: &Settings, file_manager: &impl HandleFiles) {
+fn process_file_check_ignore(path_buf: &PathBuf, settings: &Settings, file_manager: &impl HandleFiles, data_manager: &impl DataManager) {
     if !should_ignore_path(path_buf, settings,file_manager) {
         let f_path = file_manager.get_full_path(&path_buf);
         if f_path.is_ok() {
         let full_path = f_path.unwrap();
         let s_path = full_path.to_str().unwrap();
-        process_file(s_path,settings, file_manager);
+        process_file(s_path,settings, file_manager,data_manager);
         }
     }
 }
@@ -237,7 +235,7 @@ fn should_ignore_path(path_buf: &PathBuf, settings: &Settings, file_manager: &im
    
     false
 }
-fn process_path( settings: &Settings, file_manager: &impl HandleFiles) {
+fn process_path( settings: &Settings, file_manager: &impl HandleFiles, data_manager: &impl DataManager) {
     
     'filewalker: for entry in file_manager.walkdir(&settings.working_dir).filter_map(|e| e.ok()) {
         let path = entry.path().to_str().unwrap();
@@ -251,7 +249,7 @@ fn process_path( settings: &Settings, file_manager: &impl HandleFiles) {
             }
     
             if !entry.file_type().is_dir() {            
-                process_file(&s_path, settings,file_manager);               
+                process_file(&s_path, settings,file_manager,data_manager);               
             }
     }
         
@@ -260,11 +258,13 @@ fn process_path( settings: &Settings, file_manager: &impl HandleFiles) {
 fn main() -> std::result::Result<(), std::io::Error> {
     let settings = Settings::new();
     let file_manager = FileManager::new();
-    create_tables().expect("I couldn't create tables!");            
+    let data_manager = DataStore::new();
+
+    data_manager.create_tables().expect("I couldn't create tables!");            
     if settings.is_ok() {  
         let u_settings = settings.unwrap();      
-        process_path(&u_settings, &file_manager);
-        notify_changes(&u_settings, &file_manager);
+        process_path(&u_settings, &file_manager,&data_manager);
+        notify_changes(&u_settings, &file_manager,&data_manager);
     } else
     if let Some(arg) = env::args().nth(1) {
 
@@ -272,7 +272,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
                   ignore_paths : vec![], 
                   working_dir : String::from(arg),
                   action: "T".to_string(), delete_score: vec![],
-                }, &file_manager);
+                }, &file_manager,&data_manager);
                 
         
     } else {

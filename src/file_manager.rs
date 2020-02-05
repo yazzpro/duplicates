@@ -1,7 +1,6 @@
 use std::fs;
 use std::fs::File;
-use std::path::{PathBuf, Path};
-use std::io::{BufReader, Read};
+use std::path::PathBuf;
 use std::io;
 use walkdir::{WalkDir, IntoIter};
 
