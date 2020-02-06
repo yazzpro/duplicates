@@ -25,6 +25,9 @@ use settings::Settings;
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(test)]
+mod tests;
+
 fn get_file_info(path: &str, file_manager: &impl HandleFiles, data_manager: &impl DataManager) -> Option<FileInfo> {
     let srcdir = PathBuf::from(&path);
     let full_path = file_manager.get_full_path(&srcdir).expect("File could not be processed");
@@ -282,14 +285,3 @@ fn main() -> std::result::Result<(), std::io::Error> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_config_d_deletes_all_but_1() {
-
-        delete(vec!["1","2","3"], file_manager: &impl HandleFiles, data_manager: &impl DataManager)
-
-    }
-}

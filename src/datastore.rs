@@ -1,9 +1,6 @@
 use rusqlite::{params, Connection, Result};
 use rusqlite::NO_PARAMS;
 use std::convert::TryInto;
-#[cfg(test)]
-use mockall::{automock, mock, predicate::*};
-#[cfg_attr(test, automock)]
 #[derive(Debug)]
 pub struct FileInfo {
     pub full_path: String,
