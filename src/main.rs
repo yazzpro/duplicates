@@ -164,14 +164,21 @@ fn delete(filenames: Vec<String>, file_manager: &impl HandleFiles, data_manager:
         return;
     }
     let mut i = 0;
+    let mut items : Vec<String> = vec![];
+    // making copy of filenames in case the same item was passed more than once. In that case we don't want to delete it
+    for i in &filenames {
+        if !items.iter().any(|x| x == i) {
+            items.push(i.clone());
+        }
+    }
     println!("Duplicates found:");
-    while i < filenames.len() -1 {// -1 is crucial as we don't want to delete every occurence
-        println!("DELETE: {}", &filenames[i]);
-        file_manager.remove_file(&filenames[i]).unwrap();
-        data_manager.delete_entry_for_path(&filenames[i]).unwrap();
+    while i < items.len() -1 {// -1 is crucial as we don't want to delete every occurence        
+        println!("DELETE: {}", &items[i]);
+        file_manager.remove_file(&items[i]).unwrap();
+        data_manager.delete_entry_for_path(&items[i]).unwrap();        
         i+= 1;
     }
-    println!("LEAVE: {}" , &filenames.last().unwrap() );
+    println!("LEAVE: {}" , &items.last().unwrap() );
 }
 fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings, file_manager: &impl HandleFiles, data_manager: &impl DataManager) {
     let d = get_duplicates_sorted_by_score(&dups, settings);
