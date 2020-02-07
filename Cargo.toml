@@ -15,4 +15,5 @@ notify = "4.0.15"
 
 
 [dev-dependencies]
-counters = "0.5.0"
+mockall = "0.6.0"
+
