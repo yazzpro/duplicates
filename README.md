@@ -24,7 +24,7 @@ delete_score = ["download", "DCIM", "random","organizeme"]
 #### everything else - display some diagnostic stuff
 action="T"
 
-###Watchdog
+### Watchdog
 ## true - after scanning finishes, application should monitor filesystem changes and recalculate hashes for them
 ## false - after scanning finishes, quit
 watchdog = false
