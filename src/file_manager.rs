@@ -3,10 +3,6 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::io;
 use walkdir::{WalkDir, IntoIter};
-
-use mockall::*;
-use mockall::predicate::*;
-
 pub struct FileManager {
 
 }
@@ -16,7 +12,7 @@ impl FileManager {
         FileManager{}
     }
 }
-#[automock]
+#[cfg_attr(test,mockall::automock)]
 pub trait HandleFiles {
   fn remove_file(&self, path: &str) -> io::Result<()>;
   fn get_full_path(&self, srcdir: &PathBuf) -> io::Result<PathBuf>;

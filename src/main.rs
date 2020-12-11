@@ -274,14 +274,16 @@ fn main() -> std::result::Result<(), std::io::Error> {
     if settings.is_ok() {  
         let u_settings = settings.unwrap();      
         process_path(&u_settings, &file_manager,&data_manager);
-        notify_changes(&u_settings, &file_manager,&data_manager);
+        if u_settings.watchdog {
+            notify_changes(&u_settings, &file_manager,&data_manager);
+        } 
     } else
     if let Some(arg) = env::args().nth(1) {
 
         process_path(&Settings{ 
                   ignore_paths : vec![], 
                   working_dir : String::from(arg),
-                  action: "T".to_string(), delete_score: vec![],
+                  action: "T".to_string(), delete_score: vec![], watchdog: false
                 }, &file_manager,&data_manager);
                 
         

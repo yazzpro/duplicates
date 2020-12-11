@@ -10,7 +10,9 @@ pub struct Settings {
     /// T - Test delete (write which would be deleted but don't delete)
     /// S - Stop - display like for T but ends program execution
     /// All the rest - just write duplicates
-    pub action: String
+    pub action: String,
+
+    pub watchdog: bool
 }
 
 impl Settings {

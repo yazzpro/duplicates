@@ -2,10 +2,6 @@ use rusqlite::{params, Connection, Result};
 use rusqlite::NO_PARAMS;
 use std::convert::TryInto;
 
-use mockall::*;
-use mockall::predicate::*;
-
-
 #[derive(Debug)]
 pub struct FileInfo {
     pub full_path: String,
@@ -21,7 +17,7 @@ impl DataStore {
         DataStore{}
     }
 }
-#[automock]
+#[cfg_attr(test,mockall::automock)]
 pub trait DataManager {
     fn create_tables(&self) -> Result<()>;
     fn get_entries_by_hash(&self,hash: &str) -> Result<Vec<FileInfo>>;

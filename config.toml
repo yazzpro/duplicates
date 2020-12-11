@@ -2,3 +2,4 @@ ignore_paths = ["src", "target",".git"]
 working_dir = "./tests"
 delete_score = ["telefon", "DCIM", "karta","karty"]
 action="D"
+watchdog = true
