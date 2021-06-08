@@ -7,6 +7,9 @@ use crypto::digest::Digest;
 
 use notify::{Watcher, RecursiveMode,RecommendedWatcher, DebouncedEvent};
 
+use lettre::transport::smtp::authentication::Credentials;
+use lettre::{Message, SmtpTransport, Transport};
+
 use std::sync::mpsc::channel;
 use std::time::{UNIX_EPOCH, Duration};
 use std::fs::File;
@@ -17,10 +20,12 @@ use std::env;
 mod datastore;
 mod settings;
 mod file_manager;
+mod logger;
 
 use file_manager::*;
 use datastore::*;
 use settings::Settings;
+use logger::*;
 
 #[macro_use]
 extern crate serde_derive;
@@ -89,7 +94,7 @@ fn get_duplicates_for_hash(hash:&str, data_manager: &impl DataManager) -> Vec<Fi
     result
 }
 /// Main logic
-fn process_file(path: &str,settings: &Settings,file_manager: &impl HandleFiles, data_manager: &impl DataManager) {
+fn process_file(path: &str,settings: &Settings,file_manager: &impl HandleFiles, data_manager: &impl DataManager, log: &mut Logger) {
     match get_file_info(path, file_manager,data_manager) {
         Some(info) => {
             let mut file_already_added = false;
@@ -98,7 +103,9 @@ fn process_file(path: &str,settings: &Settings,file_manager: &impl HandleFiles, 
                 Some(d) => {
                     
                     if d.hash != info.hash {
+                        
                         println!("HASH changed for file : {} ! ", info.full_path);
+                        log.log(format!("HASH changed for file : {} ! ", info.full_path).to_string());
                         data_manager.delete_entry_for_path(path).unwrap();               // current fileinfo will be added as new
                     } else {
                         file_already_added = true;
@@ -115,7 +122,7 @@ fn process_file(path: &str,settings: &Settings,file_manager: &impl HandleFiles, 
             //println!("possible duplicates: {:?}", &possible_duplicates);
             if possible_duplicates.len() >1
             {
-                process_duplicates(&info, possible_duplicates, settings, file_manager,data_manager);    // new method for handling duplicates
+                process_duplicates(&info, possible_duplicates, settings, file_manager,data_manager, log);    // new method for handling duplicates
             }
            
         }
@@ -147,19 +154,22 @@ fn get_duplicates_sorted_by_score(dups: &Vec<FileInfo>, settings: &Settings) -> 
 
     just_filenames
 }
-fn mark_for_deletion(filenames: Vec<String>) {
+fn mark_for_deletion(filenames: Vec<String>, log: &mut Logger) {
     if filenames.len() <= 1 {
         return;
     }
     let mut i = 0;
     println!("Duplicates found:");
+    log.log("Duplicate found:".to_string());
     while i < filenames.len() -1 {// -1 is crucial as we don't want to delete every occurence
         println!("DELETE: {}", &filenames[i]);
+        log.log(format!("DELETE: {}", &filenames[i]).to_string());
         i+= 1;
     }
+    log.log(format!("LEAVE: {}" , &filenames.last().unwrap() ).to_string());
     println!("LEAVE: {}" , &filenames.last().unwrap() );
 }
-fn delete(filenames: Vec<String>, file_manager: &impl HandleFiles, data_manager: &impl DataManager) {
+fn delete(filenames: Vec<String>, file_manager: &impl HandleFiles, data_manager: &impl DataManager, log: &mut Logger) {
     if filenames.len() <= 1 {
         return;
     }
@@ -171,26 +181,30 @@ fn delete(filenames: Vec<String>, file_manager: &impl HandleFiles, data_manager:
             items.push(i.clone());
         }
     }
+    log.log("Duplicate found:".to_string());
     println!("Duplicates found:");
     while i < items.len() -1 {// -1 is crucial as we don't want to delete every occurence        
+        log.log(format!("DELETE: {}", &items[i]).to_string());
         println!("DELETE: {}", &items[i]);
         file_manager.remove_file(&items[i]).unwrap();
         data_manager.delete_entry_for_path(&items[i]).unwrap();        
         i+= 1;
     }
+    log.log(format!("LEAVE: {}" , &items.last().unwrap() ).to_string());
     println!("LEAVE: {}" , &items.last().unwrap() );
 }
-fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings, file_manager: &impl HandleFiles, data_manager: &impl DataManager) {
+fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings, file_manager: &impl HandleFiles, data_manager: &impl DataManager, log: &mut Logger) {
     let d = get_duplicates_sorted_by_score(&dups, settings);
     match settings.action.as_str() {
-        "D" => delete(d, file_manager,data_manager), 
-        "T" => mark_for_deletion(d),
-        "S" => { mark_for_deletion(d); std::process::exit(1); }
+        "D" => delete(d, file_manager,data_manager, log), 
+        "T" => mark_for_deletion(d, log),
+        "S" => { mark_for_deletion(d, log); std::process::exit(1); }
         _ => {  // default action - write about hashes
             for dup_info in dups.iter() {
                 if info.full_path != dup_info.full_path {
                     if info.hash == dup_info.hash && info.size == dup_info.size {
                         println!("Hashes are the same for files : {} and {} ! ", info.full_path, dup_info.full_path);
+                        log.log(format!("Hashes are the same for files : {} and {} ! ", info.full_path, dup_info.full_path).to_string());
                     }     
                 }
             }      
@@ -199,7 +213,7 @@ fn process_duplicates(info: &FileInfo, dups: Vec<FileInfo>, settings: &Settings,
     
     
 }
-fn notify_changes( settings: &Settings,file_manager: &impl HandleFiles, data_manager: &impl DataManager) {    
+fn notify_changes( settings: &Settings,file_manager: &impl HandleFiles, data_manager: &impl DataManager, log: &mut Logger) {    
     let (tx, rx) = channel();
     let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(2)).unwrap();
     watcher.watch(&settings.working_dir, RecursiveMode::Recursive).unwrap_or_default();
@@ -207,8 +221,8 @@ fn notify_changes( settings: &Settings,file_manager: &impl HandleFiles, data_man
         match rx.recv() {
             Ok(event) => {
                 match event {
-                    DebouncedEvent::Write(p) => process_file_check_ignore(&p, settings, file_manager,data_manager),
-                    DebouncedEvent::Create(p) => process_file_check_ignore(&p, settings, file_manager,data_manager), 
+                    DebouncedEvent::Write(p) => process_file_check_ignore(&p, settings, file_manager,data_manager, log),
+                    DebouncedEvent::Create(p) => process_file_check_ignore(&p, settings, file_manager,data_manager, log), 
                     _ =>  (),//println!("{:?}", event)
                 } 
                 
@@ -217,13 +231,13 @@ fn notify_changes( settings: &Settings,file_manager: &impl HandleFiles, data_man
         }
     }
 }
-fn process_file_check_ignore(path_buf: &PathBuf, settings: &Settings, file_manager: &impl HandleFiles, data_manager: &impl DataManager) {
+fn process_file_check_ignore(path_buf: &PathBuf, settings: &Settings, file_manager: &impl HandleFiles, data_manager: &impl DataManager, log: &mut Logger) {
     if !should_ignore_path(path_buf, settings,file_manager) {
         let f_path = file_manager.get_full_path(&path_buf);
         if f_path.is_ok() {
         let full_path = f_path.unwrap();
         let s_path = full_path.to_str().unwrap();
-        process_file(s_path,settings, file_manager,data_manager);
+        process_file(s_path,settings, file_manager,data_manager, log);
         }
     }
 }
@@ -245,7 +259,7 @@ fn should_ignore_path(path_buf: &PathBuf, settings: &Settings, file_manager: &im
    
     false
 }
-fn process_path( settings: &Settings, file_manager: &impl HandleFiles, data_manager: &impl DataManager) {
+fn process_path( settings: &Settings, file_manager: &impl HandleFiles, data_manager: &impl DataManager, log: &mut Logger) {
     
     'filewalker: for entry in file_manager.walkdir(&settings.working_dir).filter_map(|e| e.ok()) {
         let path = entry.path().to_str().unwrap();
@@ -259,7 +273,7 @@ fn process_path( settings: &Settings, file_manager: &impl HandleFiles, data_mana
             }
     
             if !entry.file_type().is_dir() {            
-                process_file(&s_path, settings,file_manager,data_manager);               
+                process_file(&s_path, settings,file_manager,data_manager, log);               
             }
     }
         
@@ -269,22 +283,52 @@ fn main() -> std::result::Result<(), std::io::Error> {
     let settings = Settings::new();
     let file_manager = FileManager::new();
     let data_manager = DataStore::new();
-
+    let mut log = Logger::new();
     data_manager.create_tables().expect("I couldn't create tables!");            
     if settings.is_ok() {  
         let u_settings = settings.unwrap();      
-        process_path(&u_settings, &file_manager,&data_manager);
+        
+        process_path(&u_settings, &file_manager,&data_manager, &mut log);
         if u_settings.watchdog {
-            notify_changes(&u_settings, &file_manager,&data_manager);
+            notify_changes(&u_settings, &file_manager,&data_manager, &mut log);
         } 
+        if let Some(email_address) = u_settings.email_result_to {
+            let email = Message::builder()
+            .from("Report <jaroslaw@majatech.pl>".parse().unwrap())
+            .to(email_address.parse().unwrap())
+            .subject("Duplicates report")
+            .body(log.dump())
+            .unwrap();
+
+let creds = Credentials::new(u_settings.email_username.unwrap(), u_settings.email_password.unwrap());
+
+// Open a remote connection to gmail
+let mailer = SmtpTransport::starttls_relay(&u_settings.email_hostname.unwrap())
+    .unwrap()
+    .credentials(creds)
+    .build();
+
+// Send the email
+match mailer.send(&email) {
+    Ok(_) => println!("Email sent successfully!"),
+    Err(e) => panic!("Could not send email: {:?}", e),
+}
+
+        }
     } else
     if let Some(arg) = env::args().nth(1) {
 
         process_path(&Settings{ 
                   ignore_paths : vec![], 
                   working_dir : String::from(arg),
-                  action: "T".to_string(), delete_score: vec![], watchdog: false
-                }, &file_manager,&data_manager);
+                  action: "T".to_string(), 
+                  delete_score: vec![], 
+                  watchdog: false,
+                  email_result_to: None,
+                  email_hostname: None,
+                  email_password: None,
+                  email_username: None
+                }, &file_manager,&data_manager, &mut log);
                 
         
     } else {

@@ -12,7 +12,12 @@ pub struct Settings {
     /// All the rest - just write duplicates
     pub action: String,
 
-    pub watchdog: bool
+    pub watchdog: bool,
+
+    pub email_result_to: Option<String>,
+    pub email_username: Option<String>,
+    pub email_password: Option<String>,
+    pub email_hostname: Option<String>
 }
 
 impl Settings {
