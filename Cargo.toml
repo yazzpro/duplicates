@@ -17,7 +17,7 @@ lettre = "0.10.0-rc.7"
 #sqlite3 = "*"
 
 [dependencies.rusqlite]
-version = "0.25.1"
+version = "0.25.4"
 features = ["bundled"]
 [dev-dependencies]
 mockall = "0.6.0"
