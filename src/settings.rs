@@ -1,6 +1,5 @@
-use config::{ConfigError, Config, File};
-
-#[derive(Debug, Deserialize)]
+use confy::*;
+#[derive(Debug,Serialize, Deserialize)]
 pub struct Settings {
     pub ignore_paths: Vec<String>,
     pub working_dir: String,
@@ -19,11 +18,12 @@ pub struct Settings {
     pub email_password: Option<String>,
     pub email_hostname: Option<String>
 }
-
+impl ::std::default::Default for Settings {
+    fn default() -> Self { Self {ignore_paths: Vec::new(), working_dir: ".".to_string(), delete_score: Vec::new(), action: "T".to_string(), watchdog: false, email_result_to: None, email_username: None, email_password: None, email_hostname: None} }
+}
 impl Settings {
-    pub fn new() -> Result<Self, ConfigError> {
-        let mut s = Config::new();
-        s.merge(File::with_name("config"))?;
-        s.try_into()
+    pub fn new() -> Result<Self, std::io::Error> {
+        confy::load("config")
     }
+
 }

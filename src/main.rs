@@ -1,4 +1,4 @@
-extern crate config;
+extern crate confy;
 extern crate serde;
 extern crate notify;
 

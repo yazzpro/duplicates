@@ -2,17 +2,18 @@
 name = "duplicates"
 version = "0.1.0"
 authors = ["Jarosław Pawlak <jaroslaw.pawlak@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 rust-crypto = "^0.2"
 walkdir = "2"
 #rusqlite = "0.25.1"
-config = "0.10.1"
+#config = "0.12"
+confy = "0.3.1"
 serde_derive = "^1.0.8"
 serde = "^1.0.8"
 notify = "4.0.15"
-lettre = "0.10.0-rc.3"
+lettre = "0.10.0-rc.7"
 #sqlite3 = "*"
 
 [dependencies.rusqlite]
