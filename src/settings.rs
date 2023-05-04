@@ -1,4 +1,4 @@
-use confy::*;
+
 #[derive(Debug,Serialize, Deserialize)]
 pub struct Settings {
     pub ignore_paths: Vec<String>,

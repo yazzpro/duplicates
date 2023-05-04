@@ -1,5 +1,4 @@
 use rusqlite::{params, Connection, Result};
-use rusqlite::NO_PARAMS;
 use std::convert::TryInto;
 
 #[derive(Debug)]
@@ -39,7 +38,7 @@ impl DataManager for DataStore {
              file_size INTEGER,
              last_modified INTEGER
          )",
-        NO_PARAMS,
+        ()
     )?;
 
     Ok(())

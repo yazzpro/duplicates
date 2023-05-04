@@ -1,10 +1,8 @@
-extern crate confy;
+
 extern crate serde;
 extern crate notify;
 
-use crypto::sha2::Sha512;
-use crypto::digest::Digest;
-
+use sha2::{Sha512,Digest};
 use notify::{Watcher, RecursiveMode,RecommendedWatcher, DebouncedEvent};
 
 use lettre::transport::smtp::authentication::Credentials;
@@ -14,7 +12,7 @@ use std::sync::mpsc::channel;
 use std::time::{UNIX_EPOCH, Duration};
 use std::fs::File;
 use std::path::{PathBuf, Path};
-use std::io::{BufReader, Read};
+use std::io;
 use std::env;
 
 mod datastore;
@@ -37,7 +35,7 @@ fn get_file_info(path: &str, file_manager: &impl HandleFiles, data_manager: &imp
     let srcdir = PathBuf::from(&path);
     let full_path = file_manager.get_full_path(&srcdir).expect("File could not be processed");
     
-    let file = file_manager.get_file(&full_path).expect("can't upen file");
+    let mut file = file_manager.get_file(&full_path).expect("can't upen file");
     let meta = file.metadata().unwrap();
     if meta.is_dir() {
         return None;
@@ -54,7 +52,7 @@ fn get_file_info(path: &str, file_manager: &impl HandleFiles, data_manager: &imp
     };
     if should_recalculate { 
        // print!("(re)calculating hash for file {}", path);
-        hash = calculate_hash_for_file(&file) ;
+        hash = calculate_hash_for_file(&mut file) ;
     } 
     let file_length = meta.len();
    
@@ -65,20 +63,24 @@ fn get_file_info(path: &str, file_manager: &impl HandleFiles, data_manager: &imp
         last_modified : last_update_time       
     })
 }
-fn calculate_hash_for_file(file: &File) -> String {    
-    let mut reader = BufReader::new(file);
+fn calculate_hash_for_file(file: &mut File) -> String {    
+    //let mut reader = BufReader::new(file);
     let mut hasher = Sha512::new();    
-    let mut buffer = [0; 4096];
+    // let mut buffer = [0; 4096];
 
-    loop {
-        let count = reader.read(&mut buffer).expect("what kind of error can happen on reading buffer?");
-        if count == 0 {
-            break;
-        }
-        hasher.input(&buffer[0..count]);
-    }    
+    // loop {
+    //     let count = reader.read(&mut buffer).expect("what kind of error can happen on reading buffer?");
+    //     if count == 0 {
+    //         break;
+    //     }
+        
+    //     hasher.input(&buffer[0..count]);
+    // }    
     
-    hasher.result_str()
+    // hasher.result_str()
+    let _n = io::copy(file, &mut hasher);
+    format!("{:x}", hasher.finalize())
+    
 }
 fn get_duplicates_for_hash(hash:&str, data_manager: &impl DataManager) -> Vec<FileInfo> {
     let entries = data_manager.get_entries_by_hash(&hash).expect("get_entries failed");
