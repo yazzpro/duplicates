@@ -22,7 +22,7 @@ delete_score = ["download", "DCIM", "random","organizeme"]
 #### S - as T but stop program after first duplicate found
 #### D - as T except DO delete files
 #### everything else - display some diagnostic stuff
-action="T"
+action="S"
 
 ### Watchdog
 #### true - after scanning finishes, application should monitor filesystem changes and recalculate hashes for them
